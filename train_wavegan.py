@@ -591,9 +591,12 @@ if __name__ == '__main__':
 
   parser.set_defaults(
     data_dir=None,
-    data_sample_rate=16000,
-    data_slice_len=16384,
-    data_num_channels=1,
+    # data_sample_rate=16000,
+    data_sample_rate=4000,
+    # data_slice_len=16384,
+    data_slice_len=4096,
+    # data_num_channels=1,
+    data_num_channels=2,
     data_overlap_ratio=0.,
     data_first_slice=False,
     data_pad_end=False,
@@ -601,7 +604,9 @@ if __name__ == '__main__':
     data_fast_wav=False,
     data_prefetch_gpu_num=0,
     wavegan_latent_dim=100,
+    # wavegan_latent_dim=10,
     wavegan_kernel_len=25,
+    # wavegan_kernel_len=10,
     wavegan_dim=64,
     wavegan_batchnorm=False,
     wavegan_disc_nupdates=5,
@@ -646,7 +651,8 @@ if __name__ == '__main__':
   })
 
   if args.mode == 'train':
-    fps = glob.glob(os.path.join(args.data_dir, '*'))
+    # fps = glob.glob(os.path.join(args.data_dir, '*'))
+    fps = glob.glob(args.data_dir)
     if len(fps) == 0:
       raise Exception('Did not find any audio files in specified directory')
     print('Found {} audio files in specified directory'.format(len(fps)))

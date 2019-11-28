@@ -2,9 +2,23 @@ from scipy.io.wavfile import read as wavread
 import numpy as np
 
 import tensorflow as tf
-
+import glob
+# import pandas
 import sys
 
+
+#def edit_IQs(file_path, data_len):
+#    	for file in glob.glob(file_path+'/*.txt'):
+#		IQdata = np.loadtxt(file, delimiter='   ')[:61200, :]
+#		np.savetxt(file, IQdata, delimiter='   ', fmt='%.3f')
+#
+#	return X
+
+def load_IQs(fp):
+    IQdata = np.loadtxt(fp.decode('utf-8'), delimiter='   ')
+    IQdata = IQdata.astype(np.float32)
+    return IQdata
+    
 
 def decode_audio(fp, fs=None, num_channels=1, normalize=False, fast_wav=False):
   """Decodes audio file paths into 32-bit floating point vectors.
@@ -136,9 +150,26 @@ def decode_extract_and_batch(
 
     return audio
 
-  # Decode audio
+  def _decode_IQ_shaped(fp):
+    _decode_audio_closure = lambda _fp: load_IQs(_fp)
+
+    audio = tf.py_func(
+        _decode_audio_closure,
+        [fp],
+        tf.float32,
+        stateful=False)
+    audio.set_shape([None, 1, decode_num_channels])
+
+    return audio
+
+
+#   # Decode audio
+#   dataset = dataset.map(
+#       _decode_audio_shaped,
+#       num_parallel_calls=decode_parallel_calls)
+
   dataset = dataset.map(
-      _decode_audio_shaped,
+      _decode_IQ_shaped,
       num_parallel_calls=decode_parallel_calls)
 
   # Parallel

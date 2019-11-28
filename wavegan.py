@@ -1,4 +1,5 @@
 import tensorflow as tf
+import numpy as np
 
 
 def conv1d_transpose(
@@ -42,14 +43,14 @@ def conv1d_transpose(
 """
 def WaveGANGenerator(
     z,
-    slice_len=16384,
-    nch=1,
+    slice_len=4096,
+    nch=2,
     kernel_len=25,
     dim=64,
     use_batchnorm=False,
     upsample='zeros',
     train=False):
-  assert slice_len in [16384, 32768, 65536]
+  assert slice_len in [4096, 8192, 16384]
   batch_size = tf.shape(z)[0]
 
   if use_batchnorm:
@@ -59,7 +60,7 @@ def WaveGANGenerator(
 
   # FC and reshape for convolution
   # [100] -> [16, 1024]
-  dim_mul = 16 if slice_len == 16384 else 32
+  dim_mul = 16 if slice_len == 4096 else 32
   output = z
   with tf.variable_scope('z_project'):
     output = tf.layers.dense(output, 4 * 4 * dim * dim_mul)
@@ -75,6 +76,8 @@ def WaveGANGenerator(
     output = batchnorm(output)
   output = tf.nn.relu(output)
   dim_mul //= 2
+  print("layer0")
+  print(np.shape(output))
 
   # Layer 1
   # [64, 512] -> [256, 256]
@@ -83,7 +86,8 @@ def WaveGANGenerator(
     output = batchnorm(output)
   output = tf.nn.relu(output)
   dim_mul //= 2
-
+  print("layer1")
+  print(np.shape(output))
   # Layer 2
   # [256, 256] -> [1024, 128]
   with tf.variable_scope('upconv_2'):
@@ -91,51 +95,18 @@ def WaveGANGenerator(
     output = batchnorm(output)
   output = tf.nn.relu(output)
   dim_mul //= 2
-
+  print("layer2")
+  print(np.shape(output))
   # Layer 3
   # [1024, 128] -> [4096, 64]
   with tf.variable_scope('upconv_3'):
-    output = conv1d_transpose(output, dim * dim_mul, kernel_len, 4, upsample=upsample)
-    output = batchnorm(output)
-  output = tf.nn.relu(output)
-
-  if slice_len == 16384:
-    # Layer 4
-    # [4096, 64] -> [16384, nch]
-    with tf.variable_scope('upconv_4'):
-      output = conv1d_transpose(output, nch, kernel_len, 4, upsample=upsample)
-    output = tf.nn.tanh(output)
-  elif slice_len == 32768:
-    # Layer 4
-    # [4096, 128] -> [16384, 64]
-    with tf.variable_scope('upconv_4'):
-      output = conv1d_transpose(output, dim, kernel_len, 4, upsample=upsample)
-      output = batchnorm(output)
-    output = tf.nn.relu(output)
-
-    # Layer 5
-    # [16384, 64] -> [32768, nch]
-    with tf.variable_scope('upconv_5'):
-      output = conv1d_transpose(output, nch, kernel_len, 2, upsample=upsample)
-    output = tf.nn.tanh(output)
-  elif slice_len == 65536:
-    # Layer 4
-    # [4096, 128] -> [16384, 64]
-    with tf.variable_scope('upconv_4'):
-      output = conv1d_transpose(output, dim, kernel_len, 4, upsample=upsample)
-      output = batchnorm(output)
-    output = tf.nn.relu(output)
-
-    # Layer 5
-    # [16384, 64] -> [65536, nch]
-    with tf.variable_scope('upconv_5'):
-      output = conv1d_transpose(output, nch, kernel_len, 4, upsample=upsample)
-    output = tf.nn.tanh(output)
+    output = conv1d_transpose(output, nch, kernel_len, 4, upsample=upsample)
+  output = tf.nn.tanh(output)
 
   # Automatically update batchnorm moving averages every time G is used during training
   if train and use_batchnorm:
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS, scope=tf.get_variable_scope().name)
-    if slice_len == 16384:
+    if slice_len == 4096:
       assert len(update_ops) == 10
     else:
       assert len(update_ops) == 12
@@ -196,57 +167,42 @@ def WaveGANDiscriminator(
   output = phaseshuffle(output)
 
   # Layer 1
-  # [4096, 64] -> [1024, 128]
+  # [4096, 64] -> [1024, 256]
   with tf.variable_scope('downconv_1'):
-    output = tf.layers.conv1d(output, dim * 2, kernel_len, 4, padding='SAME')
-    output = batchnorm(output)
-  output = lrelu(output)
-  output = phaseshuffle(output)
-
-  # Layer 2
-  # [1024, 128] -> [256, 256]
-  with tf.variable_scope('downconv_2'):
     output = tf.layers.conv1d(output, dim * 4, kernel_len, 4, padding='SAME')
     output = batchnorm(output)
   output = lrelu(output)
   output = phaseshuffle(output)
 
-  # Layer 3
-  # [256, 256] -> [64, 512]
-  with tf.variable_scope('downconv_3'):
+  # Layer 2
+  # [1024, 256] -> [256, 512]
+  with tf.variable_scope('downconv_2'):
     output = tf.layers.conv1d(output, dim * 8, kernel_len, 4, padding='SAME')
     output = batchnorm(output)
   output = lrelu(output)
   output = phaseshuffle(output)
 
-  # Layer 4
-  # [64, 512] -> [16, 1024]
-  with tf.variable_scope('downconv_4'):
+  # Layer 3
+  # [256, 512] -> [64, 1024]
+  with tf.variable_scope('downconv_3'):
     output = tf.layers.conv1d(output, dim * 16, kernel_len, 4, padding='SAME')
     output = batchnorm(output)
   output = lrelu(output)
+  output = phaseshuffle(output)
+  # # Layer 4
+  # # [64, 1024] -> [16, 2048]
+  with tf.variable_scope('downconv_4'):
+    output = tf.layers.conv1d(output, dim * 32, kernel_len, 4, padding='SAME')
+    output = batchnorm(output)
+  output = lrelu(output)
 
-  if slice_len == 32768:
-    # Layer 5
-    # [32, 1024] -> [16, 2048]
-    with tf.variable_scope('downconv_5'):
-      output = tf.layers.conv1d(output, dim * 32, kernel_len, 2, padding='SAME')
-      output = batchnorm(output)
-    output = lrelu(output)
-  elif slice_len == 65536:
-    # Layer 5
-    # [64, 1024] -> [16, 2048]
-    with tf.variable_scope('downconv_5'):
-      output = tf.layers.conv1d(output, dim * 32, kernel_len, 4, padding='SAME')
-      output = batchnorm(output)
-    output = lrelu(output)
 
   # Flatten
   output = tf.reshape(output, [batch_size, -1])
-
   # Connect to single logit
   with tf.variable_scope('output'):
-    output = tf.layers.dense(output, 1)[:, 0]
+    output = tf.layers.dense(output, 2)[:, 0]
+    # output = tf.layers.dense(output, 1)[:, 0]
 
   # Don't need to aggregate batchnorm update ops like we do for the generator because we only use the discriminator for training
 
